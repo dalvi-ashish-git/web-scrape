@@ -1,7 +1,7 @@
-from page_loader import load_page
-from html_processor import preprocess_html
-from content_extractor import extract_content
-from browser_manager import launch_browser, close_browser
+from scraper.page_loader import load_page
+from scraper.html_processor import preprocess_html
+from scraper.content_extractor import extract_content
+from scraper.browser_manager import launch_browser, close_browser
 
 def execute_scraping(url: str) -> dict:
     playwright, browser = launch_browser()

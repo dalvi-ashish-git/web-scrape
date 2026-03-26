@@ -1,16 +1,6 @@
 import streamlit as st, time, sys, os, io
 import pandas as pd
-
-# ── Path Fix ──────────────────────────────────────────────
-_here = os.path.dirname(os.path.abspath(__file__))
-_app  = os.path.dirname(_here)
-_root = os.path.dirname(_app)
-if _root not in sys.path:
-    sys.path.insert(0, _root)
-if _app not in sys.path:
-    sys.path.insert(0, _app)
-# ──────────────────────────────────────────────────────────
-
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 st.set_page_config(page_title="Dashboard — WebScraper Pro", page_icon="🌐",
                    layout="wide", initial_sidebar_state="collapsed")
 from utils.layout import setup_page
@@ -19,6 +9,7 @@ from scraper.browser_manager import launch_browser, close_browser
 from scraper.page_loader import load_page
 from scraper.html_processor import process_html
 from scraper.tag_tree_builder import build_tag_tree
+from scraper.tag_tree_optimizer import optimize_tag_tree
 from scraper.content_extractor import extract_content_by_tags
 from scraper.url_validator import validate_url
 from llm.tag_selector import select_relevant_tags
@@ -149,6 +140,7 @@ with main:
         with uc:
             url = st.text_input("URL", placeholder="Enter Website URL to Scrape",
                                 label_visibility="collapsed", key="dash_url")
+            query = st.text_area("❓ Enter Query (What do you want to extract?)")
         with cc:
             st.selectbox("Category", ["E-commerce", "News Articles", "Job Listings", "Custom"],
                          label_visibility="collapsed", key="dash_cat")
@@ -212,6 +204,7 @@ with main:
             # Step 5: Build tag tree
             log("🌳 Building tag tree...", 60)
             tag_tree = build_tag_tree(soup)
+            tag_tree = optimize_tag_tree(tag_tree)
 
             # Step 6: LLM tag selection
             log("🤖 AI selecting relevant tags...", 72)

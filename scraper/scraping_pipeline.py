@@ -3,7 +3,6 @@ from scraper.page_loader import load_page
 from scraper.html_processor import process_html
 from scraper.tag_tree_builder import build_tag_tree
 from scraper.content_extractor import extract_content_by_tags
-from scraper.tag_tree_optimizer import optimize_tag_tree
 from scraper.url_validator import validate_url
 
 # LLM functions (import from llm/)

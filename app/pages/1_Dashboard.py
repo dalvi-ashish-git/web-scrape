@@ -19,7 +19,6 @@ from scraper.browser_manager import launch_browser, close_browser
 from scraper.page_loader import load_page
 from scraper.html_processor import process_html
 from scraper.tag_tree_builder import build_tag_tree
-from scraper.tag_tree_optimizer import optimize_tag_tree
 from scraper.content_extractor import extract_content_by_tags
 from scraper.url_validator import validate_url
 from llm.tag_selector import select_relevant_tags
@@ -213,7 +212,6 @@ with main:
             # Step 5: Build tag tree
             log("🌳 Building tag tree...", 60)
             tag_tree = build_tag_tree(soup)
-            tag_tree = optimize_tag_tree(tag_tree)
 
             # Step 6: LLM tag selection
             log("🤖 AI selecting relevant tags...", 72)

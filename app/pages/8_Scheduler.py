@@ -73,6 +73,13 @@ with main:
     with r1c2:
         url_input = st.text_input("Target URL", placeholder="https://example.com/page", key="sch_url")
 
+    # Query input — what to extract (like Dashboard)
+    query_input = st.text_input(
+        "Query — What do you want to extract?",
+        placeholder="e.g. Extract all product names, prices, and ratings",
+        key="sch_query",
+    )
+
     r2c1, r2c2, r2c3 = st.columns(3, gap="medium")
     with r2c1:
         frequency = st.selectbox("Frequency", FREQ_OPTIONS, key="sch_freq")
@@ -90,6 +97,9 @@ with main:
     with r3c3:
         email_notify = st.toggle("Email Notification", value=False, key="sch_email")
 
+    # Active on creation toggle
+    start_active = st.toggle("Start as Active", value=True, key="sch_start_active")
+
     st.markdown('</div>', unsafe_allow_html=True)
 
     sc1, _ = st.columns([1, 4])
@@ -99,19 +109,23 @@ with main:
     if do_schedule:
         if not url_input:
             st.error("Please enter a target URL.")
+        elif not query_input:
+            st.error("Please enter a query describing what to extract.")
         else:
             new_id = f"sch_{int(datetime.now().timestamp()*1000)}"
             hr = start_time_val.strftime("%H:%M")
             dt = start_date_val.strftime("%Y-%m-%d")
+            initial_status = "Active" if start_active else "Paused"
             st.session_state.schedules.insert(0, {
                 "id": new_id, "scraper": scraper_name, "url": url_input,
+                "query": query_input,
                 "frequency": frequency, "start_time": hr, "start_date": dt,
                 "format": exp_format, "max_rows": int(max_rows),
-                "email_notify": email_notify, "status": "Active",
-                "next_run": f"{dt} {hr}",
+                "email_notify": email_notify, "status": initial_status,
+                "next_run": f"{dt} {hr}" if initial_status == "Active" else "—",
                 "run_count": 0,
             })
-            st.success(f"Scheduled — {scraper_name} runs {frequency} starting {dt} at {hr}")
+            st.success(f"Scheduled — {scraper_name} runs {frequency} starting {dt} at {hr} (Status: {initial_status})")
             st.rerun()
 
     st.markdown(f'<div style="height:0.75rem"></div>', unsafe_allow_html=True)
@@ -157,7 +171,7 @@ with main:
         th_style = (f"text-align:left;padding:0.45rem 0.7rem;font-size:0.67rem;"
                     f"font-weight:600;color:{t['muted']};text-transform:uppercase;"
                     f"letter-spacing:0.06em;border-bottom:1px solid {t['border']};")
-        headers = ["Scraper", "URL", "Frequency", "Next Run", "Format", "Status"]
+        headers = ["Scraper", "URL", "Query", "Frequency", "Next Run", "Format", "Status"]
         th_html = "".join(f'<th style="{th_style}">{h}</th>' for h in headers)
         rows_html = ""
         td = (f"padding:0.55rem 0.7rem;border-bottom:1px solid {t['border']};"
@@ -165,6 +179,9 @@ with main:
         for s in scheds:
             sbg, sfg = STATUS_COLORS.get(s["status"], ("transparent", t["text2"]))
             scol = SCRAPER_COLORS.get(s["scraper"], t["accent"])
+            q_display = s.get("query", "—")
+            if len(q_display) > 40:
+                q_display = q_display[:37] + "..."
             rows_html += f"""
 <tr>
   <td style="{td}">
@@ -176,6 +193,10 @@ with main:
   <td style="{td}font-family:monospace;font-size:0.72rem;color:{t['text2']};
        max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
     {s['url']}</td>
+  <td style="{td}font-size:0.74rem;color:{t['text2']};
+       max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+       title="{s.get('query', '')}">
+    {q_display}</td>
   <td style="{td}">{s['frequency']}</td>
   <td style="{td}color:{t['text2']};">{s['next_run']}</td>
   <td style="{td}">
@@ -207,6 +228,9 @@ with main:
                 else:
                     if st.button("Resume", key=f"resume_{s['id']}", use_container_width=True):
                         st.session_state.schedules[idx]["status"] = "Active"
+                        hr = s.get("start_time", "09:00")
+                        dt = date.today().strftime("%Y-%m-%d")
+                        st.session_state.schedules[idx]["next_run"] = f"{dt} {hr}"
                         st.rerun()
             with ac2:
                 if st.button("Delete", key=f"del_{s['id']}", use_container_width=True):
@@ -223,7 +247,7 @@ with main:
 
     st.markdown(f'<div style="height:0.75rem"></div>', unsafe_allow_html=True)
 
-    # Upcoming Runs — replaces the 7-day calendar (more useful, project-relevant)
+    # Upcoming Runs
     active_scheds = [s for s in scheds if s["status"] == "Active"]
 
     if active_scheds:
@@ -239,7 +263,7 @@ with main:
   </div>
 """, unsafe_allow_html=True)
 
-        # Build upcoming runs for next 7 occurrences per active schedule
+        # Build upcoming runs for next 3 occurrences per active schedule
         upcoming = []
         now = datetime.now()
         for s in active_scheds:
@@ -253,6 +277,7 @@ with main:
                 upcoming.append({
                     "scraper": s["scraper"],
                     "url": s["url"],
+                    "query": s.get("query", "—"),
                     "run_at": run_dt,
                     "frequency": s["frequency"],
                     "format": s["format"],
@@ -265,7 +290,7 @@ with main:
                 f"color:{t['muted']};text-transform:uppercase;letter-spacing:0.06em;"
                 f"border-bottom:1px solid {t['border']};")
         th_html = "".join(f'<th style="{th_s}">{h}</th>'
-                          for h in ["Scraper", "URL", "Scheduled At", "Frequency", "Format"])
+                          for h in ["Scraper", "URL", "Query", "Scheduled At", "Frequency", "Format"])
 
         rows_html = ""
         today = date.today()
@@ -277,6 +302,9 @@ with main:
             date_clr = t['accent'] if is_today else t['text2']
             scol = SCRAPER_COLORS.get(run["scraper"], t["accent"])
             url_s = run["url"][:35] + ("..." if len(run["url"]) > 35 else "")
+            q_s = run.get("query", "—")
+            if len(q_s) > 30:
+                q_s = q_s[:27] + "..."
             td = f"padding:0.5rem 0.7rem;border-bottom:1px solid {t['border']};font-size:0.79rem;"
             rows_html += f"""<tr>
 <td style="{td}">
@@ -286,6 +314,7 @@ with main:
   </span>
 </td>
 <td style="{td}font-family:monospace;font-size:0.71rem;color:{t['text2']};">{url_s}</td>
+<td style="{td}font-size:0.73rem;color:{t['text2']};" title="{run.get('query', '')}">{q_s}</td>
 <td style="{td}color:{date_clr};font-weight:{'700' if is_today else '400'};">{date_lbl}</td>
 <td style="{td}color:{t['text2']};">{run['frequency']}</td>
 <td style="{td}">

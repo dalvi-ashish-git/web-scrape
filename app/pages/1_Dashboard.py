@@ -85,6 +85,7 @@ def parse_final_output(final_output, extracted_data, query):
                     df = pd.DataFrame(val)
                     break
         elif isinstance(final_output, str):
+            import re
             m = re.search(r'\[[\s\S]*?\]', final_output)
             if m:
                 try:
@@ -312,22 +313,8 @@ with main:
                     finally:
                         close_browser(playwright, browser)
 
-            # Normalize final output to a DataFrame for display/download
-            try:
-                result_df = pd.DataFrame(final_output)
-            except Exception:
-                try:
-                    result_df = pd.DataFrame([final_output])
-                except Exception:
-                    result_df = pd.DataFrame()
-
-            # Save to session state for other UI sections
-            st.session_state["scrape_result_text"] = final_output
-            st.session_state["dashboard_df"] = result_df
-
-            log("Done!", 100)
-            pb.empty()
-            st_t.empty()
+                except Exception as e:
+                    st.error(f"Scrape failed: {e}")
 
         # Show results — only AI summary (larger) + download buttons, NO duplicate table
         if st.session_state.get("dashboard_df") is not None and st.session_state.get("_from_scrape"):
@@ -380,15 +367,6 @@ with main:
                 st.session_state["last_query"] = ""
                 st.session_state["_from_scrape"] = False
                 st.rerun()
-
-        finally:
-            try:
-                close_browser(playwright, browser)
-            except Exception:
-                pass
-
-    except Exception as e:
-        st.error(f"Scrape failed: {e}")
 
     with rc:
         rc_df = st.session_state.get("dashboard_df")

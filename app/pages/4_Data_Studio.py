@@ -11,9 +11,6 @@ st.set_page_config(
 )
 from utils.layout import setup_page
 from utils.icons import icon
-from services.data_analyser import analyse_dataframe, analyse_text_query
-
-# ── helpers ──────────────────────────────────────────────────────────────────
 
 def to_excel(df):
     buf = io.BytesIO()
@@ -30,47 +27,34 @@ def df_summary(df: pd.DataFrame) -> str:
              f"Columns: {', '.join(df.columns.tolist())}", ""]
     for col in df.columns:
         if pd.api.types.is_numeric_dtype(df[col]):
-            lines.append(f"• {col} [numeric]: min={df[col].min():.2f}, "
+            lines.append(f"  {col} [numeric]: min={df[col].min():.2f}, "
                          f"max={df[col].max():.2f}, mean={df[col].mean():.2f}, "
                          f"nulls={df[col].isna().sum()}")
         else:
             top = df[col].value_counts().head(3).index.tolist()
-            lines.append(f"• {col} [text]: {df[col].nunique()} unique values, "
+            lines.append(f"  {col} [text]: {df[col].nunique()} unique values, "
                          f"top: {', '.join(str(v) for v in top)}, "
                          f"nulls={df[col].isna().sum()}")
     return "\n".join(lines)
 
 def call_claude(prompt: str, system: str = "") -> str:
-    """Call Groq API for LLM responses."""
-    import urllib.request, json as _json, os
+    import urllib.request, json as _json
     from dotenv import load_dotenv
     load_dotenv()
-
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         return "[Error: GROQ_API_KEY not found in .env file]"
-
     messages = []
     if system:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
-
-    payload = {
-        "model": "llama-3.3-70b-versatile",
-        "max_tokens": 1500,
-        "messages": messages,
-    }
-
+    payload = {"model": "llama-3.3-70b-versatile", "max_tokens": 1500, "messages": messages}
     req = urllib.request.Request(
         "https://api.groq.com/openai/v1/chat/completions",
         data=_json.dumps(payload).encode(),
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        },
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
         method="POST",
     )
-
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             data = _json.loads(resp.read())
@@ -78,34 +62,23 @@ def call_claude(prompt: str, system: str = "") -> str:
     except Exception as e:
         return f"[Groq API Error: {e}]"
 
-# ── session state ─────────────────────────────────────────────────────────────
 for key, default in [
-    ("ds_files", []),          # list of {name, ext, size, df/bytes, b64, type}
-    ("ds_active_idx", None),   # index into ds_files
-    ("ds_analysis", {}),       # {filename: analysis_text}
-    ("ds_chat", []),           # [{role, content}]
+    ("ds_files", []),
+    ("ds_active_idx", None),
+    ("ds_analysis", {}),
+    ("ds_chat", []),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
 
-# ── page setup ────────────────────────────────────────────────────────────────
 t, main = setup_page("Data Studio")
 
-# ── page-level CSS ────────────────────────────────────────────────────────────
 st.markdown(f"""
 <style>
 .ds-pad {{ padding: 1rem 1.4rem; }}
 .ds-card {{
     background: {t['card']};
     border: 1px solid {t['border']};
-    border-radius: 14px;
-    padding: 1.1rem 1.2rem;
-    margin-bottom: 0.65rem;
-}}
-.ds-card-accent {{
-    background: {t['card']};
-    border: 1px solid {t['border']};
-    border-top: 3px solid {t['accent']};
     border-radius: 14px;
     padding: 1.1rem 1.2rem;
     margin-bottom: 0.65rem;
@@ -132,19 +105,6 @@ st.markdown(f"""
     letter-spacing: 0.06em;
     color: {t['text2']};
     margin-top: 2px;
-}}
-.file-pill {{
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 3px 10px;
-    border-radius: 20px;
-    font-size: 0.72rem;
-    font-weight: 600;
-    background: {t['accent_glow']};
-    color: {t['accent']};
-    border: 1px solid {t['border_l']};
-    cursor: pointer;
 }}
 .analysis-box {{
     background: {t['bg2']};
@@ -189,10 +149,8 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────────────────────────────────────
 with main:
 
-    # ── Page Header ──────────────────────────────────────────────────────────
     st.markdown(f"""
 <div class="ds-pad" style="padding-bottom:0.5rem;">
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;">
@@ -208,13 +166,11 @@ with main:
         <div class="PS" style="margin:0;">Upload files &amp; images · AI-powered analysis · Visual canvas</div>
       </div>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;">
-      <span class="BG G">
-        <span style="width:6px;height:6px;border-radius:50%;background:{t['green']};
-              display:inline-block;box-shadow:0 0 4px {t['green']};"></span>
-        AI Ready
-      </span>
-    </div>
+    <span class="BG G">
+      <span style="width:6px;height:6px;border-radius:50%;background:{t['green']};
+            display:inline-block;box-shadow:0 0 4px {t['green']};"></span>
+      AI Ready
+    </span>
   </div>
 </div>
 <div style="padding:0 1.4rem;">
@@ -222,8 +178,7 @@ with main:
 </div>
 """, unsafe_allow_html=True)
 
-    # ── Stats Row ─────────────────────────────────────────────────────────────
-    files = st.session_state.ds_files
+    files      = st.session_state.ds_files
     n_files    = len(files)
     n_tables   = sum(1 for f in files if f["type"] == "table")
     n_images   = sum(1 for f in files if f["type"] == "image")
@@ -232,10 +187,10 @@ with main:
     st.markdown(f'<div class="ds-pad" style="padding-top:0;padding-bottom:0.5rem;">', unsafe_allow_html=True)
     sc1, sc2, sc3, sc4 = st.columns(4, gap="small")
     for col, val, lbl, clr in [
-        (sc1, n_files,    "Files Loaded",    t['accent']),
-        (sc2, n_tables,   "Tabular Files",   t['blue']),
-        (sc3, n_images,   "Images",          t['purple']),
-        (sc4, n_analyzed, "Files Analysed",  t['green']),
+        (sc1, n_files,    "Files Loaded",   t['accent']),
+        (sc2, n_tables,   "Tabular Files",  t['blue']),
+        (sc3, n_images,   "Images",         t['purple']),
+        (sc4, n_analyzed, "Files Analysed", t['green']),
     ]:
         with col:
             st.markdown(f"""
@@ -246,16 +201,10 @@ with main:
 """, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── MAIN SPLIT: Upload Panel | Canvas ─────────────────────────────────────
     st.markdown('<div class="ds-pad" style="padding-top:0.4rem;">', unsafe_allow_html=True)
     left_col, right_col = st.columns([1, 2], gap="small")
 
-    # ════════════════════════════════════════════════════════════════
-    # LEFT PANEL — Upload & File Manager
-    # ════════════════════════════════════════════════════════════════
     with left_col:
-
-        # ── Upload zone ──────────────────────────────────────────
         st.markdown(f"""
 <div class="ds-card" style="margin-bottom:0.5rem;">
   <div style="font-size:0.88rem;font-weight:700;color:{t['text']};
@@ -274,7 +223,6 @@ with main:
             label_visibility="collapsed",
         )
 
-        # Process newly uploaded files
         if uploaded:
             existing_names = {f["name"] for f in st.session_state.ds_files}
             added = 0
@@ -310,7 +258,6 @@ with main:
                 st.session_state.ds_active_idx = len(st.session_state.ds_files) - 1
                 st.rerun()
 
-        # ── File Manager list ─────────────────────────────────────
         st.markdown(f"""
 <div class="ds-card" style="margin-top:0.5rem;">
   <div style="font-size:0.88rem;font-weight:700;color:{t['text']};
@@ -364,7 +311,7 @@ with main:
                         st.session_state.ds_active_idx = i
                         st.rerun()
                 with del_col:
-                    if st.button("✕", key=f"ds_del_{i}", use_container_width=True):
+                    if st.button("X", key=f"ds_del_{i}", use_container_width=True):
                         st.session_state.ds_files.pop(i)
                         if st.session_state.ds_active_idx == i:
                             st.session_state.ds_active_idx = None
@@ -372,9 +319,8 @@ with main:
                             st.session_state.ds_active_idx -= 1
                         st.rerun()
 
-        st.markdown('</div>', unsafe_allow_html=True)  # close ds-card
+        st.markdown('</div>', unsafe_allow_html=True)
 
-        # ── Quick Download Section ────────────────────────────────
         active_idx = st.session_state.ds_active_idx
         if active_idx is not None and active_idx < len(files):
             af = files[active_idx]
@@ -403,15 +349,10 @@ with main:
                         use_container_width=True, key="dl_xlsx")
                 st.markdown('</div>', unsafe_allow_html=True)
 
-    # ════════════════════════════════════════════════════════════════
-    # RIGHT PANEL — Visual Canvas + AI Analysis
-    # ════════════════════════════════════════════════════════════════
     with right_col:
-
         active_idx = st.session_state.ds_active_idx
 
         if active_idx is None or active_idx >= len(files):
-            # Empty state
             st.markdown(f"""
 <div class="empty-drop" style="min-height:60vh;display:flex;flex-direction:column;
      align-items:center;justify-content:center;">
@@ -426,11 +367,10 @@ with main:
   </div>
   <div style="font-size:0.84rem;color:{t['text2']};max-width:360px;text-align:center;line-height:1.65;">
     Upload a file on the left and select it to open the AI-powered analysis canvas.
-    Supports tabular data, images, and PDF documents.
   </div>
   <div style="display:flex;gap:0.5rem;flex-wrap:wrap;justify-content:center;margin-top:1.25rem;">
-    <span style="background:{t['card']};border:1px solid {t['border']};border-radius:20px;padding:4px 14px;font-size:0.73rem;color:{t['text2']};">CSV &middot; JSON &middot; Excel</span>
-    <span style="background:{t['card']};border:1px solid {t['border']};border-radius:20px;padding:4px 14px;font-size:0.73rem;color:{t['text2']};">PNG &middot; JPG &middot; JPEG</span>
+    <span style="background:{t['card']};border:1px solid {t['border']};border-radius:20px;padding:4px 14px;font-size:0.73rem;color:{t['text2']};">CSV · JSON · Excel</span>
+    <span style="background:{t['card']};border:1px solid {t['border']};border-radius:20px;padding:4px 14px;font-size:0.73rem;color:{t['text2']};">PNG · JPG · JPEG</span>
     <span style="background:{t['card']};border:1px solid {t['border']};border-radius:20px;padding:4px 14px;font-size:0.73rem;color:{t['text2']};">PDF Documents</span>
   </div>
 </div>
@@ -439,7 +379,6 @@ with main:
         else:
             af = files[active_idx]
 
-            # ── File header ──────────────────────────────────────
             st.markdown(f"""
 <div class="ds-card" style="margin-bottom:0.5rem;padding:0.8rem 1.1rem;">
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.4rem;">
@@ -453,7 +392,7 @@ with main:
         <div style="font-weight:700;font-size:0.92rem;color:{t['text']};">{af['name']}</div>
         <div style="font-size:0.67rem;color:{t['muted']};">
           {af['ext'].upper()} &nbsp;·&nbsp; {af['size']/1024:.1f} KB &nbsp;·&nbsp;
-          {f"{af['df'].shape[0]} rows × {af['df'].shape[1]} cols" if af['df'] is not None else af['type'].capitalize()}
+          {f"{af['df'].shape[0]} rows x {af['df'].shape[1]} cols" if af['df'] is not None else af['type'].capitalize()}
         </div>
       </div>
     </div>
@@ -464,40 +403,33 @@ with main:
 </div>
 """, unsafe_allow_html=True)
 
-            # ── Tabbed Canvas ────────────────────────────────────
             if af["type"] == "table" and af["df"] is not None:
                 df = af["df"]
-                tab1, tab2, tab3, tab4 = st.tabs([
-                    "Preview",
-                    "Charts",
-                    "AI Analysis",
-                    "Ask AI",
-                ])
+                tab1, tab2, tab3, tab4 = st.tabs(["Preview", "Charts", "AI Analysis", "Ask AI"])
 
-                # ── TAB 1: Preview ───────────────────────────────
                 with tab1:
+                    # Fullscreen-capable dataframe (use_container_width + height triggers fullscreen icon)
                     st.markdown(f"""
 <div style="font-size:0.75rem;color:{t['text2']};margin-bottom:0.4rem;">
   Showing first 100 rows &nbsp;·&nbsp;
   <strong style="color:{t['text']};">{df.shape[0]}</strong> total rows,
   <strong style="color:{t['text']};">{df.shape[1]}</strong> columns
+
 </div>
 """, unsafe_allow_html=True)
-                    st.dataframe(df.head(100), use_container_width=True, height=340)
+                    # use_container_width=True + height renders the fullscreen expand icon natively
+                    st.dataframe(df.head(100), use_container_width=True, height=360)
 
-                    # Column info
                     st.markdown(f"""
 <div class="ds-card" style="margin-top:0.5rem;">
   <div style="font-size:0.82rem;font-weight:700;color:{t['text']};margin-bottom:0.5rem;">
     Column Overview
   </div>
 """, unsafe_allow_html=True)
-                    cols_info = []
-                    for c in df.columns:
-                        dtype = "Numeric" if pd.api.types.is_numeric_dtype(df[c]) else "Text"
-                        nulls = df[c].isna().sum()
-                        cols_info.append((c, dtype, nulls, df[c].nunique()))
-
+                    cols_info = [(c,
+                                  "Numeric" if pd.api.types.is_numeric_dtype(df[c]) else "Text",
+                                  df[c].isna().sum(),
+                                  df[c].nunique()) for c in df.columns]
                     th_s = (f"text-align:left;padding:0.35rem 0.6rem;font-size:0.63rem;"
                             f"font-weight:700;color:{t['muted']};text-transform:uppercase;"
                             f"letter-spacing:0.06em;border-bottom:1px solid {t['border']};")
@@ -523,7 +455,6 @@ with main:
 </div></div>
 """, unsafe_allow_html=True)
 
-                # ── TAB 2: Charts ────────────────────────────────
                 with tab2:
                     all_cols = df.columns.tolist()
                     num_cols = [c for c in all_cols if pd.api.types.is_numeric_dtype(df[c])]
@@ -543,10 +474,17 @@ with main:
                                                       ["Bar", "Line", "Area"],
                                                       key="ds_chart_type")
 
-                        cdf = df[[x_col, y_col]].copy()
-                        if not pd.api.types.is_numeric_dtype(cdf[y_col]):
-                            cdf[y_col] = pd.to_numeric(cdf[y_col], errors="coerce")
-                        cdf = cdf.dropna().set_index(x_col)
+                        try:
+                            cdf = df[[x_col, y_col]].copy()
+                            if not pd.api.types.is_numeric_dtype(cdf[y_col]):
+                                cdf[y_col] = pd.to_numeric(
+                                    cdf[y_col].astype(str).str.replace(",","").str.strip(),
+                                    errors="coerce"
+                                )
+                            cdf = cdf.dropna(subset=[y_col]).set_index(x_col)
+                        except Exception as _ce:
+                            st.error(f"Chart preparation error: {_ce}")
+                            cdf = pd.DataFrame()
 
                         if cdf.empty:
                             st.warning("No plottable numeric data with the selected columns.")
@@ -557,15 +495,16 @@ with main:
     {y_col} by {x_col} &nbsp;—&nbsp; {chart_type} Chart
   </div>
 """, unsafe_allow_html=True)
+                            # height param causes fullscreen expand icon to appear natively
                             if chart_type == "Bar":
-                                st.bar_chart(cdf, use_container_width=True, height=300)
+                                st.bar_chart(cdf, use_container_width=True, height=320)
                             elif chart_type == "Line":
-                                st.line_chart(cdf, use_container_width=True, height=300)
+                                st.line_chart(cdf, use_container_width=True, height=320)
                             else:
-                                st.area_chart(cdf, use_container_width=True, height=300)
+                                st.area_chart(cdf, use_container_width=True, height=320)
                             st.markdown('</div>', unsafe_allow_html=True)
 
-                        # Descriptive stats
+                        # Descriptive stats — also fullscreen-capable
                         if num_cols:
                             st.markdown(f"""
 <div class="ds-card">
@@ -573,11 +512,11 @@ with main:
     Descriptive Statistics
   </div>
 """, unsafe_allow_html=True)
+                            # height param triggers native fullscreen expand icon on dataframe
                             st.dataframe(df[num_cols].describe().round(3),
-                                         use_container_width=True, height=200)
+                                         use_container_width=True, height=240)
                             st.markdown('</div>', unsafe_allow_html=True)
 
-                # ── TAB 3: AI Analysis ───────────────────────────
                 with tab3:
                     fname = af["name"]
                     if fname in st.session_state.ds_analysis:
@@ -605,70 +544,52 @@ with main:
   </div>
   <div style="font-size:0.8rem;color:{t['text2']};line-height:1.6;">
     Click <strong style="color:{t['text']};">Run AI Analysis</strong> to get a comprehensive
-    breakdown of your dataset — patterns, anomalies, column insights, and actionable recommendations
-    powered by Claude.
+    breakdown of your dataset — patterns, anomalies, column insights, and recommendations.
   </div>
 </div>
 <div style="font-size:0.73rem;color:{t['muted']};margin-bottom:0.5rem;font-family:monospace;">
-  Dataset: {df.shape[0]} rows × {df.shape[1]} columns
+  Dataset: {df.shape[0]} rows x {df.shape[1]} columns
 </div>
 """, unsafe_allow_html=True)
-                        st.markdown('<div class="PB">', unsafe_allow_html=True)
-                        run_analysis = st.button(
-                            f"Run AI Analysis on {fname}",
-                            use_container_width=True, key="run_analysis",
-                        )
-                        st.markdown('</div>', unsafe_allow_html=True)
-
-                        if run_analysis:
-                            with st.spinner("Analysing your dataset with AI…"):
+                        if st.button(f"Run AI Analysis on {fname}",
+                                     use_container_width=True, key="run_analysis"):
+                            with st.spinner("Analysing your dataset with AI..."):
                                 system_prompt = (
                                     "You are a senior data analyst. Provide a thorough, structured, "
-                                    "actionable analysis of the dataset described. Use clear sections: "
-                                    "Overview, Column Insights, Key Patterns, Anomalies / Warnings, "
-                                    "and Recommendations. Be specific and reference actual column names "
-                                    "and values. Format with clear headers using === and ---."
+                                    "actionable analysis. Use clear sections: Overview, Column Insights, "
+                                    "Key Patterns, Anomalies / Warnings, Recommendations. "
+                                    "Format with clear headers using === and ---."
                                 )
                                 user_prompt = (
                                     f"Analyse this dataset:\n\nFilename: {fname}\n\n"
-                                    f"{summary}\n\n"
-                                    "Provide a detailed analysis with sections for Overview, "
-                                    "Column Insights, Key Patterns, Anomalies, and Recommendations."
+                                    f"{summary}\n\nProvide a detailed analysis."
                                 )
                                 result = call_claude(user_prompt, system_prompt)
                             st.session_state.ds_analysis[fname] = result
                             st.rerun()
 
-                # ── TAB 4: Ask AI ────────────────────────────────
                 with tab4:
-                    fname = af["name"]
+                    fname   = af["name"]
                     summary = df_summary(df)
 
                     st.markdown(f"""
 <div class="ds-card" style="margin-bottom:0.5rem;padding:0.75rem 1rem;">
   <div style="font-size:0.78rem;color:{t['text2']};line-height:1.55;">
-    Ask any question about <strong style="color:{t['text']};">{fname}</strong> and Claude will
-    answer using your actual data structure.
+    Ask any question about <strong style="color:{t['text']};">{fname}</strong>.
+    The AI will answer using your actual data structure.
   </div>
 </div>
 """, unsafe_allow_html=True)
 
-                    # Chat display
                     chat_key = f"chat_{fname}"
                     if chat_key not in st.session_state:
                         st.session_state[chat_key] = []
                     messages = st.session_state[chat_key]
 
-                    st.markdown(f"""
-<div style="background:{t['card']};border:1px solid {t['border']};border-radius:14px;
-     padding:1rem;min-height:280px;max-height:320px;overflow-y:auto;
-     display:flex;flex-direction:column;gap:0.5rem;margin-bottom:0.5rem;">
-""", unsafe_allow_html=True)
-
                     if not messages:
                         st.markdown(f"""
-<div style="flex:1;display:flex;flex-direction:column;align-items:center;
-     justify-content:center;padding:2rem;text-align:center;">
+<div style="background:{t['card']};border:1px solid {t['border']};border-radius:14px;
+     padding:2rem;text-align:center;margin-bottom:0.5rem;">
   <div style="font-size:0.85rem;color:{t['muted']};">
     Ask a question about your data below.<br>
     <span style="font-size:0.75rem;">e.g. "What are the top 5 values in column X?"</span>
@@ -676,6 +597,11 @@ with main:
 </div>
 """, unsafe_allow_html=True)
                     else:
+                        st.markdown(f"""
+<div style="background:{t['card']};border:1px solid {t['border']};border-radius:14px;
+     padding:1rem;max-height:300px;overflow-y:auto;
+     display:flex;flex-direction:column;gap:0.5rem;margin-bottom:0.5rem;">
+""", unsafe_allow_html=True)
                         for msg in messages:
                             if msg["role"] == "user":
                                 st.markdown(f"""
@@ -694,27 +620,16 @@ with main:
   <div class="chat-bubble-ai">{msg['content'].replace(chr(10),'<br>')}</div>
 </div>
 """, unsafe_allow_html=True)
+                        st.markdown('</div>', unsafe_allow_html=True)
 
-                    st.markdown('</div>', unsafe_allow_html=True)
-
-                    user_q = st.chat_input(
-                        "Ask anything about this dataset…",
-                        key=f"ds_chat_{fname}",
-                    )
+                    user_q = st.chat_input("Ask anything about this dataset...", key=f"ds_chat_{fname}")
                     if user_q:
                         st.session_state[chat_key].append({"role": "user", "content": user_q})
-                        with st.spinner("Thinking…"):
-                            system_prompt = (
-                                "You are a precise data analyst assistant. The user has uploaded a dataset. "
-                                "Answer questions concisely and accurately based on the dataset metadata provided. "
-                                "If you can infer statistics or insights from the column info, do so. "
-                                "Keep answers focused and helpful."
+                        with st.spinner("Thinking..."):
+                            reply = call_claude(
+                                f"Dataset info:\n{summary}\n\nUser question: {user_q}",
+                                "You are a precise data analyst assistant. Answer concisely."
                             )
-                            user_prompt = (
-                                f"Dataset info:\n{summary}\n\n"
-                                f"User question: {user_q}"
-                            )
-                            reply = call_claude(user_prompt, system_prompt)
                         st.session_state[chat_key].append({"role": "assistant", "content": reply})
                         st.rerun()
 
@@ -724,7 +639,6 @@ with main:
                             st.rerun()
 
             elif af["type"] == "image":
-                # ── IMAGE VIEWER + AI Vision Analysis ───────────
                 tab_img1, tab_img2 = st.tabs(["Image Viewer", "AI Vision Analysis"])
 
                 with tab_img1:
@@ -737,30 +651,18 @@ with main:
 </div>
 """, unsafe_allow_html=True)
                     st.image(af["bytes"], caption=af["name"], use_container_width=True)
-
-                    # Download
                     mime = "image/png" if af["ext"] == "png" else "image/jpeg"
-                    st.download_button(
-                        f"Download {af['name']}",
-                        af["bytes"], af["name"], mime,
-                        use_container_width=True, key="dl_img",
-                    )
+                    st.download_button(f"Download {af['name']}", af["bytes"], af["name"], mime,
+                                       use_container_width=True, key="dl_img")
 
                 with tab_img2:
                     fname = af["name"]
                     if fname in st.session_state.ds_analysis:
                         analysis_text = st.session_state.ds_analysis[fname]
-                        st.markdown(f"""
-<div style="display:flex;align-items:center;gap:7px;margin-bottom:0.5rem;">
-  <span class="BG G">{icon('check-circle',10,t['green'])} Analysis complete</span>
-</div>
-<div class="analysis-box">{analysis_text}</div>
-""", unsafe_allow_html=True)
-                        st.download_button(
-                            "Download Analysis (.txt)", analysis_text,
+                        st.markdown(f'<div class="analysis-box">{analysis_text}</div>', unsafe_allow_html=True)
+                        st.download_button("Download Analysis", analysis_text,
                             f"{fname}_analysis.txt", "text/plain",
-                            use_container_width=True, key="dl_img_analysis",
-                        )
+                            use_container_width=True, key="dl_img_analysis")
                         if st.button("Re-analyse", use_container_width=True, key="reanalyse_img"):
                             del st.session_state.ds_analysis[fname]
                             st.rerun()
@@ -771,71 +673,53 @@ with main:
     {icon('scan-eye',13,t['accent'])} AI Vision Analysis
   </div>
   <div style="font-size:0.8rem;color:{t['text2']};line-height:1.6;">
-    Claude will examine your image and provide a detailed description,
-    identify key objects, text, patterns, and offer context-aware insights.
+    Examine your image and get a detailed description, key objects, text, and insights.
   </div>
 </div>
 """, unsafe_allow_html=True)
-                        st.markdown('<div class="PB">', unsafe_allow_html=True)
-                        run_img_analysis = st.button(
-                            f"Analyse Image with AI",
-                            use_container_width=True, key="run_img_analysis",
-                        )
-                        st.markdown('</div>', unsafe_allow_html=True)
-
-                        if run_img_analysis:
-                            with st.spinner("Analysing image with AI…"):
+                        if st.button("Analyse Image with AI", use_container_width=True, key="run_img_analysis"):
+                            with st.spinner("Analysing image with AI..."):
                                 result = call_claude(
-                                    "Analyse this image and provide: 1) Overall description, "
-                                    "2) Key objects/elements, 3) Any visible text, "
-                                    "4) Colors and composition, 5) Context and purpose, "
-                                    "6) Notable insights.",
-                                    "You are an expert image analyst. Describe clearly and thoroughly."
+                                    "Analyse this image: 1) Description, 2) Key objects, "
+                                    "3) Visible text, 4) Colors, 5) Context, 6) Insights.",
+                                    "You are an expert image analyst."
                                 )
                             st.session_state.ds_analysis[fname] = result
                             st.rerun()
 
             elif af["type"] == "pdf":
-                # ── PDF Viewer ───────────────────────────────────
                 tab_pdf1, tab_pdf2 = st.tabs(["PDF Viewer", "Download"])
-
                 with tab_pdf1:
                     st.markdown(f"""
 <div class="ds-card" style="margin-bottom:0.5rem;padding:0.7rem 1rem;">
   <div style="font-size:0.78rem;color:{t['text2']};">
-    PDF document: <strong style="color:{t['text']};">{af['name']}</strong>
+    PDF: <strong style="color:{t['text']};">{af['name']}</strong>
     &nbsp;·&nbsp; {af['size']/1024:.1f} KB
   </div>
 </div>
 """, unsafe_allow_html=True)
                     b64_pdf = af["b64"]
-                    pdf_display = (
+                    st.markdown(
                         f'<iframe src="data:application/pdf;base64,{b64_pdf}" '
                         f'width="100%" height="500px" '
-                        f'style="border:1px solid {t["border"]};border-radius:12px;"></iframe>'
+                        f'style="border:1px solid {t["border"]};border-radius:12px;"></iframe>',
+                        unsafe_allow_html=True
                     )
-                    st.markdown(pdf_display, unsafe_allow_html=True)
-
                 with tab_pdf2:
-                    st.download_button(
-                        f"⬇  Download {af['name']}",
-                        af["bytes"], af["name"], "application/pdf",
-                        use_container_width=True, key="dl_pdf",
-                    )
-
+                    st.download_button(f"Download {af['name']}", af["bytes"], af["name"],
+                                       "application/pdf", use_container_width=True, key="dl_pdf")
             else:
                 st.markdown(f"""
 <div class="ds-card" style="text-align:center;padding:3rem;">
   <div style="font-size:0.92rem;color:{t['muted']};">
-    Preview not available for this file type.<br>
-    <span style="font-size:0.78rem;">Use the download button in the left panel.</span>
+    Preview not available for this file type.
   </div>
 </div>
 """, unsafe_allow_html=True)
 
-    st.markdown('</div>', unsafe_allow_html=True)  # ds-pad
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── BOTTOM: Global AI Chat (cross-file) ───────────────────────────────────
+    # Global AI Chat
     st.markdown('<div class="ds-pad" style="padding-top:0;">', unsafe_allow_html=True)
     st.markdown(f"""
 <div style="height:1px;background:{t['border']};margin-bottom:0.75rem;"></div>
@@ -849,7 +733,6 @@ with main:
 """, unsafe_allow_html=True)
 
     gchat = st.session_state.ds_chat
-
     if gchat:
         st.markdown(f"""
 <div style="background:{t['card']};border:1px solid {t['border']};border-radius:14px;
@@ -877,7 +760,7 @@ with main:
         st.markdown('</div>', unsafe_allow_html=True)
 
     global_q = st.chat_input(
-        "Ask about any of your loaded files, or ask a general data question…",
+        "Ask about any of your loaded files, or ask a general data question...",
         key="ds_global_chat",
     )
     if global_q:
@@ -888,14 +771,11 @@ with main:
                 files_ctx += f"\n\nFile: {f['name']}\n{df_summary(f['df'])}"
             else:
                 files_ctx += f"\n\nFile: {f['name']} (type: {f['type']}, size: {f['size']/1024:.1f} KB)"
-
-        with st.spinner("Thinking…"):
-            sys_p = ("You are a helpful data analyst assistant embedded in a web scraping "
-                     "and data analysis tool. Answer questions concisely and accurately. "
-                     "You have access to the user's loaded files metadata.")
-            usr_p = (f"Loaded files context:{files_ctx if files_ctx else ' None loaded.'}\n\n"
-                     f"User question: {global_q}")
-            reply = call_claude(usr_p, sys_p)
+        with st.spinner("Thinking..."):
+            reply = call_claude(
+                f"Loaded files:{files_ctx if files_ctx else ' None.'}\n\nQuestion: {global_q}",
+                "You are a helpful data analyst. Answer concisely and accurately."
+            )
         st.session_state.ds_chat.append({"role": "assistant", "content": reply})
         st.rerun()
 

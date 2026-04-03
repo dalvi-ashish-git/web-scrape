@@ -251,7 +251,7 @@ with main:
     uid_display = _get_current_user_id()
     user_badge  = (
         f'<span style="font-size:0.7rem;color:{t["muted"]};margin-left:8px;">'
-        f'👤 {uid_display[:8]}…</span>'
+        f'{uid_display[:8]}…</span>'
         if uid_display else ""
     )
 
